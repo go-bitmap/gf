@@ -19,34 +19,47 @@ import (
 // Note that it returns a new Service if it changes the input Service with custom one.
 func (r *Registry) Register(ctx context.Context, service gsvc.Service) (gsvc.Service, error) {
 	service = NewService(service)
+	if r.leaseId != 0 {
+		err := r.saveService(ctx, service, r.leaseId)
+		return service, err
+	}
 	r.lease = etcd3.NewLease(r.client)
 	grant, err := r.lease.Grant(ctx, int64(r.keepaliveTTL.Seconds()))
 	if err != nil {
 		return nil, gerror.Wrapf(err, `etcd grant failed with keepalive ttl "%s"`, r.keepaliveTTL)
 	}
-	var (
-		key   = service.GetKey()
-		value = service.GetValue()
-	)
-	_, err = r.client.Put(ctx, key, value, etcd3.WithLease(grant.ID))
+	err = r.saveService(ctx, service, grant.ID)
 	if err != nil {
-		return nil, gerror.Wrapf(
-			err,
-			`etcd put failed with key "%s", value "%s", lease "%d"`,
-			key, value, grant.ID,
-		)
+		return nil, err
 	}
-	r.logger.Debugf(
-		ctx,
-		`etcd put success with key "%s", value "%s", lease "%d"`,
-		key, value, grant.ID,
-	)
 	keepAliceCh, err := r.client.KeepAlive(context.Background(), grant.ID)
 	if err != nil {
 		return nil, err
 	}
 	go r.doKeepAlive(grant.ID, keepAliceCh)
+	r.leaseId = grant.ID
 	return service, nil
+}
+
+func (r *Registry) saveService(ctx context.Context, service gsvc.Service, leaseId etcd3.LeaseID) error {
+	var (
+		key   = service.GetKey()
+		value = service.GetValue()
+	)
+	_, err := r.client.Put(ctx, key, value, etcd3.WithLease(leaseId))
+	if err != nil {
+		return gerror.Wrapf(
+			err,
+			`etcd put failed with key "%s", value "%s", lease "%d"`,
+			key, value, leaseId,
+		)
+	}
+	r.logger.Debugf(
+		ctx,
+		`etcd put success with key "%s", value "%s", lease "%d"`,
+		key, value, leaseId,
+	)
+	return nil
 }
 
 // Deregister off-lines and removes `service` from the Registry.

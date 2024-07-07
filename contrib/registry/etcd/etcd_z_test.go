@@ -7,7 +7,11 @@
 package etcd_test
 
 import (
+	"context"
+	"fmt"
+	clientv3 "go.etcd.io/etcd/client/v3"
 	"testing"
+	"time"
 
 	"github.com/gogf/gf/contrib/registry/etcd/v2"
 	"github.com/gogf/gf/v2/net/gsvc"
@@ -142,4 +146,68 @@ func TestWatch(t *testing.T) {
 		err := registry.Deregister(ctx, svc1)
 		t.AssertNil(err)
 	})
+}
+
+func TestLease(t *testing.T) {
+	// 创建 etcd 客户端
+	cli, err := clientv3.New(clientv3.Config{
+		Endpoints:   []string{"10.8.5.21:2379"},
+		DialTimeout: 5 * time.Second,
+	})
+	if err != nil {
+		fmt.Println("Error creating etcd client:", err)
+		return
+	}
+	defer cli.Close()
+	var lease clientv3.Lease
+	// 创建租约
+	lease = clientv3.NewLease(cli)
+	grant, err := lease.Grant(context.TODO(), 10)
+	if err != nil {
+		fmt.Println("Error creating lease:", err)
+		return
+	}
+
+	// 将键与租约关联
+	key := "foo"
+	value := "bar"
+	_, err = cli.Put(context.TODO(), key, value, clientv3.WithLease(grant.ID))
+	if err != nil {
+		fmt.Println("Error putting key with lease:", err)
+		return
+	}
+
+	// 定期续约租约
+	ch, kaerr := cli.KeepAlive(context.TODO(), grant.ID)
+	if kaerr != nil {
+		fmt.Println("Error setting up keep-alive:", kaerr)
+		return
+	}
+
+	// 处理续约响应
+	go func() {
+		for {
+			ka := <-ch
+			if ka == nil {
+				fmt.Println("Lease keep-alive channel closed")
+				return
+			}
+			fmt.Println("Lease keep-alive response received:", ka)
+		}
+	}()
+
+	// 模拟一些操作
+	time.Sleep(30 * time.Second)
+
+	// 更新键值并续约
+	newValue := "baz"
+	_, err = cli.Put(context.TODO(), key, newValue, clientv3.WithLease(grant.ID))
+	if err != nil {
+		fmt.Println("Error updating key with lease:", err)
+		return
+	}
+	fmt.Println("Key updated with new value and lease renewed")
+
+	// 保持程序运行以观察续约效果
+	select {}
 }

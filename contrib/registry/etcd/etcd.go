@@ -30,6 +30,7 @@ type Registry struct {
 	client       *etcd3.Client
 	kv           etcd3.KV
 	lease        etcd3.Lease
+	leaseId      etcd3.LeaseID
 	keepaliveTTL time.Duration
 	logger       glog.ILogger
 }
