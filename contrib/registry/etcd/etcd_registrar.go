@@ -8,6 +8,7 @@ package etcd
 
 import (
 	"context"
+	"log"
 
 	etcd3 "go.etcd.io/etcd/client/v3"
 
@@ -80,13 +81,24 @@ func (r *Registry) doKeepAlive(leaseID etcd3.LeaseID, keepAliceCh <-chan *etcd3.
 			r.logger.Noticef(ctx, "keepalive done for lease id: %d", leaseID)
 			return
 
-		case res, ok := <-keepAliceCh:
-			if res != nil {
-				// r.logger.Debugf(ctx, `keepalive loop: %v, %s`, ok, res.String())
-			}
+		case _, ok := <-keepAliceCh:
 			if !ok {
 				r.logger.Noticef(ctx, `keepalive exit, lease id: %d`, leaseID)
-				return
+				// 通道关闭，重新续租
+				r.lease = etcd3.NewLease(r.client)
+				lease, err := r.lease.Grant(context.Background(), int64(r.keepaliveTTL.Seconds()))
+				r.leaseId = lease.ID
+				if err != nil {
+					log.Println("Error granting lease:", err)
+					break
+				}
+				keepAliceCh, err = r.client.KeepAlive(context.Background(), lease.ID)
+				if err != nil {
+					log.Println("Error keeping alive lease:", err)
+					go r.doKeepAlive(leaseID, keepAliceCh)
+					return
+				}
+
 			}
 		}
 	}
