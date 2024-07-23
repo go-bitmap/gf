@@ -33,6 +33,8 @@ type Registry struct {
 	leaseId      etcd3.LeaseID
 	keepaliveTTL time.Duration
 	logger       glog.ILogger
+	service      gsvc.Service
+	registryFlag bool
 }
 
 // Option is the option for the etcd registry.

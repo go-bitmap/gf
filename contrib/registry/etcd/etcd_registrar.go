@@ -8,9 +8,8 @@ package etcd
 
 import (
 	"context"
-	"log"
-
 	etcd3 "go.etcd.io/etcd/client/v3"
+	"time"
 
 	"github.com/gogf/gf/v2/errors/gerror"
 	"github.com/gogf/gf/v2/net/gsvc"
@@ -60,6 +59,8 @@ func (r *Registry) saveService(ctx context.Context, service gsvc.Service, leaseI
 		`etcd put success with key "%s", value "%s", lease "%d"`,
 		key, value, leaseId,
 	)
+	r.service = service
+	r.registryFlag = true
 	return nil
 }
 
@@ -84,18 +85,17 @@ func (r *Registry) doKeepAlive(leaseID etcd3.LeaseID, keepAliceCh <-chan *etcd3.
 		case _, ok := <-keepAliceCh:
 			if !ok {
 				r.logger.Noticef(ctx, `keepalive exit, lease id: %d`, leaseID)
-				// 通道关闭，重新续租
-				r.lease = etcd3.NewLease(r.client)
-				lease, err := r.lease.Grant(context.Background(), int64(r.keepaliveTTL.Seconds()))
-				r.leaseId = lease.ID
-				if err != nil {
-					log.Println("Error granting lease:", err)
-					break
-				}
-				keepAliceCh, err = r.client.KeepAlive(context.Background(), lease.ID)
-				if err != nil {
-					log.Println("Error keeping alive lease:", err)
-					go r.doKeepAlive(leaseID, keepAliceCh)
+				// 通道关闭，重新注册
+				if r.service != nil {
+					for i := 0; i < 10; i++ {
+						r.leaseId = 0
+						_, err := r.Register(ctx, r.service)
+						if err != nil {
+							time.Sleep(time.Second)
+							continue
+						}
+						return
+					}
 					return
 				}
 
