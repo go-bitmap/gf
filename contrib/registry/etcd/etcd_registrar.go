@@ -8,6 +8,7 @@ package etcd
 
 import (
 	"context"
+	"github.com/gogf/gf/v2/os/grpool"
 	etcd3 "go.etcd.io/etcd/client/v3"
 	"time"
 
@@ -36,7 +37,9 @@ func (r *Registry) Register(ctx context.Context, service gsvc.Service) (gsvc.Ser
 	if err != nil {
 		return nil, err
 	}
-	go r.doKeepAlive(grant.ID, keepAliceCh)
+	_ = grpool.AddWithRecover(ctx, func(ctx context.Context) {
+		r.doKeepAlive(grant.ID, keepAliceCh)
+	}, nil)
 	r.leaseId = grant.ID
 	return service, nil
 }
