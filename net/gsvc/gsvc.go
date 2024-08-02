@@ -82,6 +82,9 @@ type Service interface {
 	// The Metadata is key-value pair map specifying extra attributes of a service.
 	GetMetadata() Metadata
 
+	// SetMetadata
+	// The Metadata is key-value pair map specifying extra attributes of a service.
+	SetMetadata(metadata map[string]interface{})
 	// GetEndpoints returns the Endpoints of service.
 	// The Endpoints contain multiple host/port information of service.
 	GetEndpoints() Endpoints

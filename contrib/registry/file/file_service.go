@@ -50,6 +50,10 @@ func (s *Service) GetMetadata() gsvc.Metadata {
 	return s.Metadata
 }
 
+func (s *Service) SetMetadata(metadata map[string]interface{}) {
+	s.Metadata = metadata
+}
+
 // GetEndpoints returns the Endpoints of service.
 // The Endpoints contain multiple host/port information of service.
 func (s *Service) GetEndpoints() gsvc.Endpoints {
