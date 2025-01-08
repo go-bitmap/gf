@@ -125,6 +125,10 @@ func (s *LocalService) GetMetadata() Metadata {
 	return s.Metadata
 }
 
+func (s *LocalService) SetMetadata(metadata map[string]interface{}) {
+	s.Metadata = metadata
+}
+
 // GetEndpoints returns the Endpoints of service.
 // The Endpoints contain multiple host/port information of service.
 func (s *LocalService) GetEndpoints() Endpoints {
