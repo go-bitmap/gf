@@ -32,33 +32,35 @@ func (r *Registry) doRegisterLease(ctx context.Context, service gsvc.Service) er
 
 	ctx, cancel := context.WithTimeout(context.Background(), r.etcdConfig.DialTimeout)
 	defer cancel()
-
-	grant, err := r.lease.Grant(ctx, int64(r.keepaliveTTL.Seconds()))
-	if err != nil {
-		return gerror.Wrapf(err, `etcd grant failed with keepalive ttl "%s"`, r.keepaliveTTL)
+	if r.leaseId == 0 {
+		grant, err := r.lease.Grant(ctx, int64(r.keepaliveTTL.Seconds()))
+		if err != nil {
+			return gerror.Wrapf(err, `etcd grant failed with keepalive ttl "%s"`, r.keepaliveTTL)
+		}
+		r.leaseId = grant.ID
 	}
 	var (
 		key   = service.GetKey()
 		value = service.GetValue()
 	)
-	_, err = r.client.Put(ctx, key, value, etcd3.WithLease(grant.ID))
+	_, err := r.client.Put(ctx, key, value, etcd3.WithLease(r.leaseId))
 	if err != nil {
 		return gerror.Wrapf(
 			err,
 			`etcd put failed with key "%s", value "%s", lease "%d"`,
-			key, value, grant.ID,
+			key, value, r.leaseId,
 		)
 	}
 	r.logger.Debugf(
 		ctx,
 		`etcd put success with key "%s", value "%s", lease "%d"`,
-		key, value, grant.ID,
+		key, value, r.leaseId,
 	)
-	keepAliceCh, err := r.client.KeepAlive(context.Background(), grant.ID)
+	keepAliceCh, err := r.client.KeepAlive(context.Background(), r.leaseId)
 	if err != nil {
 		return err
 	}
-	go r.doKeepAlive(service, grant.ID, keepAliceCh)
+	go r.doKeepAlive(service, r.leaseId, keepAliceCh)
 	return nil
 }
 
